@@ -7,8 +7,46 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { getLanguageModel } from "@/lib/provider";
 import { generationPrompt } from "@/lib/prompts/generation";
+import { getOrCreateAnonSession } from "@/lib/anon-session";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
+  // Skip rate limiting for mock provider (development mode)
+  const isMockProvider = !process.env.ANTHROPIC_API_KEY;
+
+  if (!isMockProvider) {
+    // Get session info
+    const session = await getSession();
+    const anonSession = await getOrCreateAnonSession();
+
+    // Determine identifier and limit
+    const isAuthenticated = !!session;
+    const identifier = isAuthenticated
+      ? `user:${session.userId}`
+      : `anon:${anonSession.id}`;
+    const limit = isAuthenticated
+      ? RATE_LIMITS.authenticated
+      : RATE_LIMITS.anonymous;
+
+    // Check rate limit
+    const result = checkRateLimit(identifier, limit);
+
+    if (!result.allowed) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded",
+          message: isAuthenticated
+            ? "You've used all your prompts."
+            : "Anonymous users are limited to 2 prompts. Sign up for more!",
+          limit: result.limit,
+          remaining: 0,
+        },
+        { status: 429 }
+      );
+    }
+  }
+
   const {
     messages,
     files,
@@ -29,8 +67,6 @@ export async function POST(req: Request) {
   fileSystem.deserializeFromNodes(files);
 
   const model = getLanguageModel();
-  // Use fewer steps for mock provider to prevent repetition
-  const isMockProvider = !process.env.ANTHROPIC_API_KEY;
   const result = streamText({
     model,
     messages,
