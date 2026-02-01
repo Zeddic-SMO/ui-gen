@@ -8,6 +8,13 @@ vi.mock("../MarkdownRenderer", () => ({
   MarkdownRenderer: ({ content }: { content: string }) => <div>{content}</div>,
 }));
 
+// Mock the ToolInvocationBadge component
+vi.mock("../ToolInvocationBadge", () => ({
+  ToolInvocationBadge: ({ toolInvocation }: { toolInvocation: { toolName: string } }) => (
+    <div data-testid="tool-badge">{toolInvocation.toolName}</div>
+  ),
+}));
+
 afterEach(() => {
   cleanup();
 });
