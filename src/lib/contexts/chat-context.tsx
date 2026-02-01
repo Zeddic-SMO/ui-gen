@@ -5,6 +5,7 @@ import {
   useContext,
   ReactNode,
   useEffect,
+  useState,
 } from "react";
 import { useChat as useAIChat } from "@ai-sdk/react";
 import { Message } from "ai";
@@ -16,12 +17,19 @@ interface ChatContextProps {
   initialMessages?: Message[];
 }
 
+export interface RateLimitError {
+  message: string;
+  limit: number;
+  remaining: number;
+}
+
 interface ChatContextType {
   messages: Message[];
   input: string;
   handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   status: string;
+  rateLimitError: RateLimitError | null;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -32,6 +40,7 @@ export function ChatProvider({
   initialMessages = [],
 }: ChatContextProps & { children: ReactNode }) {
   const { fileSystem, handleToolCall } = useFileSystem();
+  const [rateLimitError, setRateLimitError] = useState<RateLimitError | null>(null);
 
   const {
     messages,
@@ -48,6 +57,31 @@ export function ChatProvider({
     },
     onToolCall: ({ toolCall }) => {
       handleToolCall(toolCall);
+    },
+    onError: async (error) => {
+      // Check if this is a rate limit error (429)
+      // The error from useChat includes the response
+      if (error.message.includes("Rate limit exceeded")) {
+        try {
+          // Parse the error message which contains our JSON response
+          const match = error.message.match(/\{[\s\S]*\}/);
+          if (match) {
+            const errorData = JSON.parse(match[0]);
+            setRateLimitError({
+              message: errorData.message,
+              limit: errorData.limit,
+              remaining: errorData.remaining,
+            });
+          }
+        } catch {
+          // Fallback error message
+          setRateLimitError({
+            message: "You've reached your prompt limit.",
+            limit: 0,
+            remaining: 0,
+          });
+        }
+      }
     },
   });
 
@@ -66,6 +100,7 @@ export function ChatProvider({
         handleInputChange,
         handleSubmit,
         status,
+        rateLimitError,
       }}
     >
       {children}

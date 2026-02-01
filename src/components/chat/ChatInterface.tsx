@@ -5,11 +5,12 @@ import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChat } from "@/lib/contexts/chat-context";
-import { Bot } from "lucide-react";
+import { Bot, AlertCircle } from "lucide-react";
+import Link from "next/link";
 
 export function ChatInterface() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const { messages, input, handleInputChange, handleSubmit, status } = useChat();
+  const { messages, input, handleInputChange, handleSubmit, status, rateLimitError } = useChat();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -40,12 +41,29 @@ export function ChatInterface() {
           </div>
         </ScrollArea>
       )}
+      {rateLimitError && (
+        <div className="mx-4 mb-2 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm">
+            <p className="text-amber-800 font-medium">Prompt limit reached</p>
+            <p className="text-amber-700 mt-0.5">
+              {rateLimitError.message}{" "}
+              {rateLimitError.message.includes("Sign up") && (
+                <Link href="/login" className="text-amber-800 underline hover:text-amber-900 font-medium">
+                  Sign up now
+                </Link>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
       <div className="mt-4 flex-shrink-0">
         <MessageInput
           input={input}
           handleInputChange={handleInputChange}
           handleSubmit={handleSubmit}
           isLoading={status === "submitted" || status === "streaming"}
+          disabled={!!rateLimitError}
         />
       </div>
     </div>
